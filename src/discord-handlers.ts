@@ -51,10 +51,11 @@ export function setupDiscordHandlers(discord: DiscordClient, serchat: SerchatCli
     }
 
     if (commandName === 'allow-bridging') {
-      const serchatServerId = interaction.options.getString('serchatserverid', true);
+      const serchatServerId = interaction.options.getString('serchatserverid', true).trim().toLowerCase();
+      const normalizedGuildId = guildId.trim();
       await db.run(
         'INSERT OR IGNORE INTO servers_allowlist (discord_server_id, serchat_server_id, added_by) VALUES (?, ?, "discord")',
-        [guildId, serchatServerId],
+        [normalizedGuildId, serchatServerId],
       );
       await interaction.reply({
         content: `Added to allowlist. (Serchat Server: ${serchatServerId})`,
@@ -62,9 +63,10 @@ export function setupDiscordHandlers(discord: DiscordClient, serchat: SerchatCli
     }
 
     if (commandName === 'configure-bridge') {
-      const discordChannelId = interaction.options.getString('discordchannelid', true);
-      const serchatChannelId = interaction.options.getString('serchatchannelid', true);
-      const serchatServerId = interaction.options.getString('serchatserverid', true);
+      const discordChannelId = interaction.options.getString('discordchannelid', true).trim();
+      const serchatChannelId = interaction.options.getString('serchatchannelid', true).trim();
+      const serchatServerId = interaction.options.getString('serchatserverid', true).trim().toLowerCase();
+      const normalizedGuildId = guildId.trim();
 
       await interaction.deferReply();
 
@@ -74,7 +76,7 @@ export function setupDiscordHandlers(discord: DiscordClient, serchat: SerchatCli
         return;
       }
 
-      const hasMutual = await hasMutualAllowlist(guildId, serchatServerId);
+      const hasMutual = await hasMutualAllowlist(normalizedGuildId, serchatServerId);
       if (!hasMutual) {
         await interaction.editReply({
           content: `Mutual allowlist entry not found. Both Discord and Serchat servers must allow bridging with each other.`,
@@ -85,7 +87,7 @@ export function setupDiscordHandlers(discord: DiscordClient, serchat: SerchatCli
       const result = await db.run(
         `INSERT INTO bridge_requests (discord_channel_id, discord_server_id, serchat_channel_id, serchat_server_id, status, initiated_by, created_at)
          VALUES (?, ?, ?, ?, 'pending_serchat', 'discord', ?)`,
-        [discordChannelId, guildId, serchatChannelId, serchatServerId, Date.now()],
+        [discordChannelId, normalizedGuildId, serchatChannelId, serchatServerId, Date.now()],
       );
 
       const requestId = result.lastID;
@@ -106,14 +108,15 @@ export function setupDiscordHandlers(discord: DiscordClient, serchat: SerchatCli
     }
 
     if (commandName === 'remove-bridge') {
-      const discordChannelId = interaction.options.getString('discordchannelid', true);
-      const serchatChannelId = interaction.options.getString('serchatchannelid', true);
+      const discordChannelId = interaction.options.getString('discordchannelid', true).trim();
+      const serchatChannelId = interaction.options.getString('serchatchannelid', true).trim();
+      const normalizedGuildId = guildId.trim();
 
       await interaction.deferReply();
 
       const bridge = await db.get(
         'SELECT * FROM bridges WHERE discord_channel_id = ? AND serchat_channel_id = ? AND discord_server_id = ?',
-        [discordChannelId, serchatChannelId, guildId],
+        [discordChannelId, serchatChannelId, normalizedGuildId],
       );
 
       if (!bridge) {

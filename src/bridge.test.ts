@@ -177,17 +177,17 @@ describe('Bridge Bot Utility Tests', () => {
   it('hasMutualAllowlist should return true only if both sides explicitly allowed each other', async () => {
     await db.run(
       'INSERT INTO servers_allowlist (discord_server_id, serchat_server_id, added_by) VALUES (?, ?, ?)',
-      ['D1', 'S1', 'discord'],
+      ['D1', 's1', 'discord'],
     );
     await db.run(
       'INSERT INTO servers_allowlist (discord_server_id, serchat_server_id, added_by) VALUES (?, ?, ?)',
-      ['D1', 'S1', 'serchat'],
+      ['D1', 's1', 'serchat'],
     );
     expect(await hasMutualAllowlist('D1', 'S1')).toBe(true);
 
     await db.run(
       'INSERT INTO servers_allowlist (discord_server_id, serchat_server_id, added_by) VALUES (?, ?, ?)',
-      ['D2', 'S2', 'discord'],
+      ['D2', 's2', 'discord'],
     );
     expect(await hasMutualAllowlist('D2', 'S2')).toBe(false);
   });
@@ -500,7 +500,7 @@ describe('Bridge Bot Utility Tests', () => {
 
     await db.run(
       'INSERT INTO bridge_requests (discord_channel_id, discord_server_id, serchat_channel_id, serchat_server_id, status, initiated_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      ['DC_PENDING', 'DS1', 'SC_PENDING', 'SS1', 'pending_serchat', 'discord', Date.now()],
+      ['DC_PENDING', 'DS1', 'SC_PENDING', 'ss1', 'pending_serchat', 'discord', Date.now()],
     );
 
     discord.channels.fetch = vi.fn().mockResolvedValue({
@@ -551,7 +551,7 @@ describe('Bridge Bot Utility Tests', () => {
 
     await db.run(
       'INSERT INTO bridge_requests (discord_channel_id, discord_server_id, serchat_channel_id, serchat_server_id, status, initiated_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      ['DC_CMD', 'DS1', 'SC_CMD', 'SS1', 'pending_serchat', 'discord', Date.now()],
+      ['DC_CMD', 'DS1', 'SC_CMD', 'ss1', 'pending_serchat', 'discord', Date.now()],
     );
 
     discord.channels.fetch = vi.fn().mockResolvedValue({

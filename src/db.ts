@@ -122,14 +122,17 @@ export async function hasMutualAllowlist(
   discordServerId: string,
   serchatServerId: string,
 ): Promise<boolean> {
+  const normalizedDiscordServerId = discordServerId.trim();
+  const normalizedSerchatServerId = serchatServerId.trim().toLowerCase();
+
   const discordRow = await db.get(
     'SELECT id FROM servers_allowlist WHERE added_by = "discord" AND discord_server_id = ? AND serchat_server_id = ?',
-    [discordServerId, serchatServerId],
+    [normalizedDiscordServerId, normalizedSerchatServerId],
   );
 
   const serchatRow = await db.get(
     'SELECT id FROM servers_allowlist WHERE added_by = "serchat" AND serchat_server_id = ? AND discord_server_id = ?',
-    [serchatServerId, discordServerId],
+    [normalizedSerchatServerId, normalizedDiscordServerId],
   );
 
   return !!discordRow && !!serchatRow;

@@ -257,11 +257,12 @@ class AllowBridgingCommand extends BotCommand {
       return;
     }
 
-    const discordServerId = interaction.getString('discordServerId') as string;
+    const discordServerId = (interaction.getString('discordServerId') as string).trim();
+    const normalizedServerId = serverId.trim().toLowerCase();
 
     await db.run(
       'INSERT OR IGNORE INTO servers_allowlist (discord_server_id, serchat_server_id, added_by) VALUES (?, ?, "serchat")',
-      [discordServerId, serverId],
+      [discordServerId, normalizedServerId],
     );
 
     await interaction.reply(`Added to allowlist. (Discord Server: ${discordServerId})`);
@@ -297,12 +298,13 @@ class RemoveBridgeCommand extends BotCommand {
       return;
     }
 
-    const discordChannelId = interaction.getString('discordChannelId') as string;
-    const serchatChannelId = interaction.getString('serchatChannelId') as string;
+    const discordChannelId = (interaction.getString('discordChannelId') as string).trim();
+    const serchatChannelId = (interaction.getString('serchatChannelId') as string).trim();
+    const normalizedServerId = serverId.trim().toLowerCase();
 
     const bridge = await db.get(
       'SELECT * FROM bridges WHERE discord_channel_id = ? AND serchat_channel_id = ? AND serchat_server_id = ?',
-      [discordChannelId, serchatChannelId, serverId],
+      [discordChannelId, serchatChannelId, normalizedServerId],
     );
 
     if (!bridge) {
@@ -370,12 +372,13 @@ class AcceptBridgeCommand extends BotCommand {
       return;
     }
 
-    const requestId = interaction.getString('requestId') as string;
+    const requestId = (interaction.getString('requestId') as string).trim();
+    const normalizedServerId = serverId.trim().toLowerCase();
 
     const cutoff = Date.now() - EXPIRY_MS;
     const request = await db.get(
       'SELECT * FROM bridge_requests WHERE id = ? AND serchat_channel_id = ? AND serchat_server_id = ? AND status = "pending_serchat" AND created_at >= ?',
-      [requestId, interaction.channelId, serverId, cutoff],
+      [requestId, interaction.channelId, normalizedServerId, cutoff],
     );
 
     if (!request) {
@@ -503,7 +506,7 @@ export function setupSerchatHandlers(discord: DiscordClient, serchat: SerchatCli
       const cutoff = Date.now() - EXPIRY_MS;
       const request = await db.get(
         'SELECT * FROM bridge_requests WHERE serchat_channel_id = ? AND serchat_server_id = ? AND status = "pending_serchat" AND created_at >= ?',
-        [msg.channelId, msg.serverId, cutoff],
+        [msg.channelId.trim(), msg.serverId.trim().toLowerCase(), cutoff],
       );
 
       if (request) {

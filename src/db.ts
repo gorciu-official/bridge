@@ -79,7 +79,32 @@ export async function initDB(): Promise<void> {
       target_channel_id TEXT NOT NULL,
       target_webhook_message_id TEXT NOT NULL
     );
+  `);
 
+  await db.exec(`
+    DELETE FROM servers_allowlist
+    WHERE rowid NOT IN (
+      SELECT MIN(rowid)
+      FROM servers_allowlist
+      GROUP BY discord_server_id, serchat_server_id, added_by
+    );
+
+    DELETE FROM bridges
+    WHERE rowid NOT IN (
+      SELECT MIN(rowid)
+      FROM bridges
+      GROUP BY discord_channel_id
+    );
+
+    DELETE FROM bridges
+    WHERE rowid NOT IN (
+      SELECT MIN(rowid)
+      FROM bridges
+      GROUP BY serchat_channel_id
+    );
+  `);
+
+  await db.exec(`
     CREATE INDEX IF NOT EXISTS idx_message_map_source ON message_map(source_platform, source_message_id);
     CREATE INDEX IF NOT EXISTS idx_bridges_discord_channel ON bridges(discord_channel_id);
     CREATE INDEX IF NOT EXISTS idx_bridges_serchat_channel ON bridges(serchat_channel_id);

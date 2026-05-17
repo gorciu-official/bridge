@@ -661,7 +661,7 @@ export function setupSerchatHandlers(discord: DiscordClient, serchat: SerchatCli
           await serchat.sendMessage(
             bridge.serchat_server_id,
             bridge.serchat_channel_id,
-            `⚠️ **Bridge Error**: Failed to forward message to Discord.`,
+            `**Bridge Error**: Failed to forward message to Discord.`,
           );
         } catch (err) {
           console.error('[Serchat->Discord] Failed to send failure alert to Serchat channel:', err);

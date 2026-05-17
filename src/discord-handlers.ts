@@ -200,7 +200,7 @@ export function setupDiscordHandlers(discord: DiscordClient, serchat: SerchatCli
       } catch (e: unknown) {
         console.error('[Discord->Serchat] Failed to forward message:', e);
         try {
-          await msg.channel.send(`⚠️ **Bridge Error**: Failed to forward message to Serchat.`);
+          await msg.channel.send(`**Bridge Error**: Failed to forward message to Serchat.`);
         } catch (err) {
           console.error('[Discord->Serchat] Failed to send failure alert to Discord channel:', err);
         }

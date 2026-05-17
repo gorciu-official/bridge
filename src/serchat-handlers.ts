@@ -487,7 +487,9 @@ export function setupSerchatHandlers(discord: DiscordClient, serchat: SerchatCli
     if (msg.isWebhook) return;
 
     if (msg.poll) return;
-    if ((msg as { stickerId?: string }).stickerId) return;
+    if (msg.stickerId) return;
+
+    if (!msg.text?.trim() && !msg.hasAttachments()) return;
 
     const content = msg.text?.trim().toLowerCase();
 

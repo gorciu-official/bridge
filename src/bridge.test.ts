@@ -577,4 +577,80 @@ describe('Bridge Bot Utility Tests', () => {
     expect(bridge).toBeDefined();
     expect(bridge.serchat_webhook_id).toBe('sw1');
   });
+
+  it('should not forward a Discord message to Serchat if it contains a sticker or poll', async () => {
+    await db.run(
+      'INSERT INTO bridges (discord_channel_id, discord_server_id, serchat_channel_id, serchat_server_id, discord_webhook_id, discord_webhook_token, serchat_webhook_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ['DC_FORWARD', 'DS1', 'SC_FORWARD', 'SS1', 'dw1', 'dt1', 'sw1'],
+    );
+
+    serchat.webhooks.executeWebhook = vi.fn();
+
+    const discordMessageCreate = discordEvents['messageCreate'];
+    expect(discordMessageCreate).toBeDefined();
+
+    const mockMsgSticker = {
+      author: { bot: false, username: 'test-user', displayAvatarURL: () => 'avatar-url' },
+      channel: { id: 'DC_FORWARD' },
+      content: 'I sent a sticker!',
+      id: 'm-sticker',
+      stickers: { size: 1 },
+    };
+
+    await discordMessageCreate(mockMsgSticker as unknown);
+    expect(serchat.webhooks.executeWebhook).not.toHaveBeenCalled();
+
+    const mockMsgPoll = {
+      author: { bot: false, username: 'test-user', displayAvatarURL: () => 'avatar-url' },
+      channel: { id: 'DC_FORWARD' },
+      content: 'I sent a poll!',
+      id: 'm-poll',
+      poll: {},
+    };
+
+    await discordMessageCreate(mockMsgPoll as unknown);
+    expect(serchat.webhooks.executeWebhook).not.toHaveBeenCalled();
+  });
+
+  it('should not forward a Serchat message to Discord if it contains a sticker or poll', async () => {
+    await db.run(
+      'INSERT INTO bridges (discord_channel_id, discord_server_id, serchat_channel_id, serchat_server_id, discord_webhook_id, discord_webhook_token, serchat_webhook_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ['DC_FORWARD', 'DS1', 'SC_FORWARD', 'SS1', 'dw1', 'dt1', 'sw1'],
+    );
+
+    mockWebhookSend.mockClear();
+
+    const serchatMessageCreate = serchatEvents['messageCreate'];
+    expect(serchatMessageCreate).toBeDefined();
+
+    const mockMsgSticker = {
+      senderId: 'user1',
+      senderUsername: 'test-user',
+      serverId: 'SS1',
+      channelId: 'SC_FORWARD',
+      text: 'I sent a sticker!',
+      messageId: 'sm-sticker',
+      stickerId: 'sticker-123',
+      attachments: [],
+      isWebhook: false,
+    };
+
+    await serchatMessageCreate(mockMsgSticker as unknown);
+    expect(mockWebhookSend).not.toHaveBeenCalled();
+
+    const mockMsgPoll = {
+      senderId: 'user1',
+      senderUsername: 'test-user',
+      serverId: 'SS1',
+      channelId: 'SC_FORWARD',
+      text: 'I sent a poll!',
+      messageId: 'sm-poll',
+      poll: {},
+      attachments: [],
+      isWebhook: false,
+    };
+
+    await serchatMessageCreate(mockMsgPoll as unknown);
+    expect(mockWebhookSend).not.toHaveBeenCalled();
+  });
 });

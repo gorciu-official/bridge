@@ -251,7 +251,7 @@ export function setupDiscordHandlers(discord: DiscordClient, serchat: SerchatCli
         forwardedMessage,
         'Forwarded attachment',
       );
-      const quotedForward = quoteDiscordMessage('Forwarded message', forwardedContent);
+      const quotedForward = quoteDiscordMessage(`Forwarded by ${username}`, forwardedContent);
       finalContent = finalContent ? `${quotedForward}\n${finalContent}` : quotedForward;
     } else if (msg.reference?.messageId) {
       try {

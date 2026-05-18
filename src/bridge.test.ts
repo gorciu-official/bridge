@@ -514,7 +514,7 @@ describe('Bridge Bot Utility Tests', () => {
     expect(mockMsg.channel.messages.fetch).not.toHaveBeenCalled();
     expect(serchat.webhooks.executeWebhook).toHaveBeenCalledWith('sw1', {
       content:
-        '> **Forwarded message**: Forwarded hello @Forwarded User https://example.com/forwarded\n> [Forwarded attachment 1](https://cdn.discordapp.com/attachments/forwarded/image.png)',
+        '> **Forwarded by test-user**: Forwarded hello @Forwarded User https://example.com/forwarded\n> [Forwarded attachment 1](https://cdn.discordapp.com/attachments/forwarded/image.png)',
       username: 'test-user',
       avatarUrl: 'avatar-url',
       noEmbedsUrls: [

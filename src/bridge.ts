@@ -1,6 +1,7 @@
 import {
   Client as DiscordClient,
   GatewayIntentBits,
+  Partials,
   REST,
   Routes,
   SlashCommandBuilder,
@@ -41,6 +42,7 @@ const discord = new DiscordClient({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
   ],
+  partials: [Partials.Channel, Partials.Message],
 });
 
 const serchat = new SerchatClient({

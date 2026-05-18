@@ -30,6 +30,10 @@ vi.mock('discord.js', () => {
       GuildMessages: 2,
       MessageContent: 3,
     },
+    Partials: {
+      Channel: 1,
+      Message: 2,
+    },
     REST: class {
       setToken = vi.fn().mockReturnThis();
       put = vi.fn();
@@ -608,6 +612,83 @@ describe('Bridge Bot Utility Tests', () => {
     const mapped = await db.get('SELECT * FROM message_map WHERE source_message_id = "sm2"');
     expect(mapped).toBeDefined();
     expect(mapped.target_webhook_message_id).toBe('dw_msg_id');
+  });
+
+  it('should edit the Serchat webhook message when a bridged Discord message is edited', async () => {
+    await db.run(
+      'INSERT INTO bridges (discord_channel_id, discord_server_id, serchat_channel_id, serchat_server_id, discord_webhook_id, discord_webhook_token, serchat_webhook_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ['DC_FORWARD', 'DS1', 'SC_FORWARD', 'SS1', 'dw1', 'dt1', 'sw1'],
+    );
+    await db.run(
+      'INSERT INTO message_map (source_platform, source_message_id, target_platform, target_channel_id, target_webhook_message_id) VALUES (?, ?, ?, ?, ?)',
+      ['discord', 'discord-edit-1', 'serchat', 'SC_FORWARD', 'serchat-webhook-message-1'],
+    );
+
+    serchat.webhooks.editWebhookMessage = vi.fn().mockResolvedValue({});
+
+    const discordMessageUpdate = discordEvents['messageUpdate'];
+    expect(discordMessageUpdate).toBeDefined();
+    await discordMessageUpdate(
+      {} as unknown,
+      {
+        id: 'discord-edit-1',
+        partial: true,
+        fetch: vi.fn().mockResolvedValue({
+          id: 'discord-edit-1',
+          author: { bot: false },
+          content: 'Edited hello <@545562211393732618>',
+          attachments: {
+            size: 1,
+            values: () => [{ url: 'https://cdn.discordapp.com/attachments/123/edit.png' }],
+          },
+          mentions: {
+            members: {
+              get: (id: string) => {
+                if (id === '545562211393732618') {
+                  return { displayName: 'Edited User', user: { username: 'edited-user' } };
+                }
+                return undefined;
+              },
+            },
+            users: { get: () => undefined },
+          },
+        }),
+      } as unknown,
+    );
+
+    expect(serchat.webhooks.editWebhookMessage).toHaveBeenCalledWith(
+      'sw1',
+      'serchat-webhook-message-1',
+      {
+        content:
+          'Edited hello @Edited User\n[Attachment 1](https://cdn.discordapp.com/attachments/123/edit.png)',
+      },
+    );
+  });
+
+  it('should edit the Discord webhook message when a bridged Serchat message is edited', async () => {
+    await db.run(
+      'INSERT INTO bridges (discord_channel_id, discord_server_id, serchat_channel_id, serchat_server_id, discord_webhook_id, discord_webhook_token, serchat_webhook_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ['DC_FORWARD', 'DS1', 'SC_FORWARD', 'SS1', 'dw1', 'dt1', 'sw1'],
+    );
+    await db.run(
+      'INSERT INTO message_map (source_platform, source_message_id, target_platform, target_channel_id, target_webhook_message_id) VALUES (?, ?, ?, ?, ?)',
+      ['serchat', 'serchat-edit-1', 'discord', 'DC_FORWARD', 'discord-webhook-message-1'],
+    );
+
+    mockWebhookEditMessage.mockClear();
+
+    const serchatMessageUpdate = serchatEvents['messageUpdate'];
+    expect(serchatMessageUpdate).toBeDefined();
+    await serchatMessageUpdate({
+      messageId: 'serchat-edit-1',
+      text: 'Edited Serchat <userid:\'690cd6f250f11be9566ea1ea\'> and <emoji:6a00c3c239e601dbb84880f5>',
+    } as unknown);
+
+    expect(mockWebhookEditMessage).toHaveBeenCalledWith('discord-webhook-message-1', {
+      content:
+        'Edited Serchat @Display-690cd6f250f11be9566ea1ea and :Emoji-6a00c3c239e601dbb84880f5:',
+    });
   });
 
   it('should delete the Serchat webhook message when a bridged Discord message is deleted', async () => {

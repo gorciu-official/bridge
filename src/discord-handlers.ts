@@ -1,4 +1,9 @@
-import { Client as DiscordClient, WebhookClient, type Message } from 'discord.js';
+import {
+  Client as DiscordClient,
+  WebhookClient,
+  type Message,
+  type PartialMessage,
+} from 'discord.js';
 import { Client as SerchatClient } from 'serchat.ts';
 import {
   db,
@@ -13,7 +18,8 @@ const MAX_NO_EMBEDS_URLS = 25;
 const DISCORD_FORWARD_REFERENCE_TYPE = 1;
 const URL_PATTERN = /https?:\/\/[^\s<>()]+/gi;
 
-type DiscordReadableMessage = Pick<Message, 'content' | 'attachments' | 'mentions'>;
+type DiscordBridgeMessage = Message | PartialMessage;
+type DiscordReadableMessage = Pick<DiscordBridgeMessage, 'content' | 'attachments' | 'mentions'>;
 
 export function extractUrls(text: string): string[] {
   const urls: string[] = [];
@@ -66,6 +72,20 @@ function appendDiscordAttachmentLinks(content: string, msg: DiscordReadableMessa
 function quoteDiscordMessage(label: string, content: string): string {
   const quotedContent = content.trim() || ' ';
   return `> **${label}**: ${quotedContent.replace(/\n/g, '\n> ')}`;
+}
+
+async function fetchDiscordMessageIfPartial(
+  msg: DiscordBridgeMessage,
+): Promise<DiscordBridgeMessage | null> {
+  if ('partial' in msg && msg.partial === true) {
+    try {
+      return await msg.fetch();
+    } catch (e: unknown) {
+      console.error('[Discord->Serchat] Failed to fetch partial message:', e);
+      return null;
+    }
+  }
+  return msg;
 }
 
 export async function ensureDiscordWebhook(
@@ -294,14 +314,22 @@ export function setupDiscordHandlers(discord: DiscordClient, serchat: SerchatCli
   });
 
   discord.on('messageUpdate', async (oldMsg, newMsg) => {
-    if (newMsg.author?.bot) return;
+    const msg = await fetchDiscordMessageIfPartial(newMsg);
+    if (msg === null) return;
+    if (msg.author?.bot) return;
+
     const mappings = await db.all(
       'SELECT * FROM message_map WHERE source_platform = "discord" AND source_message_id = ?',
-      [newMsg.id],
+      [msg.id],
     );
     if (mappings.length === 0) return;
 
-    const content = resolveDiscordMentions(newMsg, newMsg.content || ' ');
+    let content = resolveDiscordMentions(msg, msg.content || ' ');
+    content = appendDiscordAttachmentLinks(content, msg);
+    if (content.length > 1990) {
+      content = content.substring(0, 1990) + '…';
+    }
+
     for (const map of mappings) {
       try {
         const bridge = await db.get(

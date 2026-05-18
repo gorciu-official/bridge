@@ -610,6 +610,120 @@ describe('Bridge Bot Utility Tests', () => {
     expect(mapped.target_webhook_message_id).toBe('dw_msg_id');
   });
 
+  it('should delete the Serchat webhook message when a bridged Discord message is deleted', async () => {
+    await db.run(
+      'INSERT INTO bridges (discord_channel_id, discord_server_id, serchat_channel_id, serchat_server_id, discord_webhook_id, discord_webhook_token, serchat_webhook_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ['DC_FORWARD', 'DS1', 'SC_FORWARD', 'SS1', 'dw1', 'dt1', 'sw1'],
+    );
+    await db.run(
+      'INSERT INTO message_map (source_platform, source_message_id, target_platform, target_channel_id, target_webhook_message_id) VALUES (?, ?, ?, ?, ?)',
+      ['discord', 'discord-delete-1', 'serchat', 'SC_FORWARD', 'serchat-webhook-message-1'],
+    );
+
+    serchat.webhooks.deleteWebhookMessage = vi.fn().mockResolvedValue({});
+
+    const discordMessageDelete = discordEvents['messageDelete'];
+    expect(discordMessageDelete).toBeDefined();
+    await discordMessageDelete({ id: 'discord-delete-1' } as unknown);
+
+    expect(serchat.webhooks.deleteWebhookMessage).toHaveBeenCalledWith(
+      'sw1',
+      'serchat-webhook-message-1',
+    );
+    const mapped = await db.get(
+      'SELECT * FROM message_map WHERE source_message_id = "discord-delete-1"',
+    );
+    expect(mapped).toBeUndefined();
+  });
+
+  it('should delete Serchat webhook messages when bridged Discord messages are bulk deleted', async () => {
+    await db.run(
+      'INSERT INTO bridges (discord_channel_id, discord_server_id, serchat_channel_id, serchat_server_id, discord_webhook_id, discord_webhook_token, serchat_webhook_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ['DC_FORWARD', 'DS1', 'SC_FORWARD', 'SS1', 'dw1', 'dt1', 'sw1'],
+    );
+    await db.run(
+      'INSERT INTO message_map (source_platform, source_message_id, target_platform, target_channel_id, target_webhook_message_id) VALUES (?, ?, ?, ?, ?)',
+      ['discord', 'discord-bulk-1', 'serchat', 'SC_FORWARD', 'serchat-webhook-message-1'],
+    );
+    await db.run(
+      'INSERT INTO message_map (source_platform, source_message_id, target_platform, target_channel_id, target_webhook_message_id) VALUES (?, ?, ?, ?, ?)',
+      ['discord', 'discord-bulk-2', 'serchat', 'SC_FORWARD', 'serchat-webhook-message-2'],
+    );
+
+    serchat.webhooks.deleteWebhookMessage = vi.fn().mockResolvedValue({});
+
+    const discordMessageDeleteBulk = discordEvents['messageDeleteBulk'];
+    expect(discordMessageDeleteBulk).toBeDefined();
+    await discordMessageDeleteBulk(
+      new Map([
+        ['discord-bulk-1', { id: 'discord-bulk-1' }],
+        ['discord-bulk-2', { id: 'discord-bulk-2' }],
+      ]) as unknown,
+    );
+
+    expect(serchat.webhooks.deleteWebhookMessage).toHaveBeenCalledWith(
+      'sw1',
+      'serchat-webhook-message-1',
+    );
+    expect(serchat.webhooks.deleteWebhookMessage).toHaveBeenCalledWith(
+      'sw1',
+      'serchat-webhook-message-2',
+    );
+    const remaining = await db.all(
+      'SELECT * FROM message_map WHERE source_message_id IN ("discord-bulk-1", "discord-bulk-2")',
+    );
+    expect(remaining).toHaveLength(0);
+  });
+
+  it('should delete the Discord webhook message when a bridged Serchat message is deleted', async () => {
+    await db.run(
+      'INSERT INTO bridges (discord_channel_id, discord_server_id, serchat_channel_id, serchat_server_id, discord_webhook_id, discord_webhook_token, serchat_webhook_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ['DC_FORWARD', 'DS1', 'SC_FORWARD', 'SS1', 'dw1', 'dt1', 'sw1'],
+    );
+    await db.run(
+      'INSERT INTO message_map (source_platform, source_message_id, target_platform, target_channel_id, target_webhook_message_id) VALUES (?, ?, ?, ?, ?)',
+      ['serchat', 'serchat-delete-1', 'discord', 'DC_FORWARD', 'discord-webhook-message-1'],
+    );
+
+    const serchatMessageDelete = serchatEvents['messageDelete'];
+    expect(serchatMessageDelete).toBeDefined();
+    await serchatMessageDelete({ messageId: 'serchat-delete-1' } as unknown);
+
+    expect(mockWebhookDeleteMessage).toHaveBeenCalledWith('discord-webhook-message-1');
+    const mapped = await db.get(
+      'SELECT * FROM message_map WHERE source_message_id = "serchat-delete-1"',
+    );
+    expect(mapped).toBeUndefined();
+  });
+
+  it('should delete Discord webhook messages when bridged Serchat messages are bulk deleted', async () => {
+    await db.run(
+      'INSERT INTO bridges (discord_channel_id, discord_server_id, serchat_channel_id, serchat_server_id, discord_webhook_id, discord_webhook_token, serchat_webhook_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ['DC_FORWARD', 'DS1', 'SC_FORWARD', 'SS1', 'dw1', 'dt1', 'sw1'],
+    );
+    await db.run(
+      'INSERT INTO message_map (source_platform, source_message_id, target_platform, target_channel_id, target_webhook_message_id) VALUES (?, ?, ?, ?, ?)',
+      ['serchat', 'serchat-bulk-1', 'discord', 'DC_FORWARD', 'discord-webhook-message-1'],
+    );
+    await db.run(
+      'INSERT INTO message_map (source_platform, source_message_id, target_platform, target_channel_id, target_webhook_message_id) VALUES (?, ?, ?, ?, ?)',
+      ['serchat', 'serchat-bulk-2', 'discord', 'DC_FORWARD', 'discord-webhook-message-2'],
+    );
+
+    const serchatMessageBulkDelete = serchatEvents['messageBulkDelete'];
+    expect(serchatMessageBulkDelete).toBeDefined();
+    await serchatMessageBulkDelete({
+      messageIds: ['serchat-bulk-1', 'serchat-bulk-2'],
+    } as unknown);
+
+    expect(mockWebhookDeleteMessage).toHaveBeenCalledWith('discord-webhook-message-1');
+    expect(mockWebhookDeleteMessage).toHaveBeenCalledWith('discord-webhook-message-2');
+    const remaining = await db.all(
+      'SELECT * FROM message_map WHERE source_message_id IN ("serchat-bulk-1", "serchat-bulk-2")',
+    );
+    expect(remaining).toHaveLength(0);
+  });
+
   it('should complete handshake when a Serchat admin types accept exactly', async () => {
     serchat.hasPermission = vi.fn().mockResolvedValue(true);
 

@@ -344,6 +344,42 @@ export function setupDiscordHandlers(discord: DiscordClient, serchat: SerchatCli
         console.error('[Discord->Serchat] Failed to delete message:', e);
       }
     }
+
+    await db.run('DELETE FROM message_map WHERE source_platform = "discord" AND source_message_id = ?', [
+      msg.id,
+    ]);
+  });
+
+  discord.on('messageDeleteBulk', async (messages) => {
+    for (const msg of messages.values()) {
+      const mappings = await db.all(
+        'SELECT * FROM message_map WHERE source_platform = "discord" AND source_message_id = ?',
+        [msg.id],
+      );
+      if (mappings.length === 0) continue;
+
+      for (const map of mappings) {
+        try {
+          const bridge = await db.get(
+            'SELECT serchat_webhook_id FROM bridges WHERE serchat_channel_id = ?',
+            [map.target_channel_id],
+          );
+          if (bridge) {
+            await serchat.webhooks.deleteWebhookMessage(
+              String(bridge.serchat_webhook_id),
+              String(map.target_webhook_message_id),
+            );
+          }
+        } catch (e: unknown) {
+          console.error('[Discord->Serchat] Failed to bulk-delete message:', e);
+        }
+      }
+
+      await db.run(
+        'DELETE FROM message_map WHERE source_platform = "discord" AND source_message_id = ?',
+        [msg.id],
+      );
+    }
   });
 }
 

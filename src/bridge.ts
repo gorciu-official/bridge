@@ -27,7 +27,7 @@ import {
 
 config();
 
-const { DISCORD_TOKEN, DISCORD_CLIENT_ID, SERCHAT_TOKEN } = process.env;
+const { DISCORD_TOKEN, DISCORD_CLIENT_ID, SERCHAT_TOKEN, SERCHAT_API_BASE_URL } = process.env;
 
 if (!DISCORD_TOKEN || !DISCORD_CLIENT_ID || !SERCHAT_TOKEN) {
   if (process.env.NODE_ENV !== 'test') {
@@ -46,6 +46,7 @@ const discord = new DiscordClient({
 });
 
 const serchat = new SerchatClient({
+  ...(SERCHAT_API_BASE_URL ? { apiBaseUrl: SERCHAT_API_BASE_URL } : {}),
   logLevel: LogLevel.INFO,
 });
 

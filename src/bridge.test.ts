@@ -17,12 +17,16 @@ const mockWebhookSend = vi.fn().mockResolvedValue({ id: 'dw_msg_id' });
 const mockWebhookEditMessage = vi.fn().mockResolvedValue({});
 const mockWebhookDeleteMessage = vi.fn().mockResolvedValue({});
 const mockWebhookDelete = vi.fn().mockResolvedValue({});
+const { mockSerchatClientConstructor } = vi.hoisted(() => ({
+  mockSerchatClientConstructor: vi.fn(),
+}));
 
 vi.mock('discord.js', () => {
   return {
     Client: class {
       login = vi.fn();
       on = vi.fn();
+      once = vi.fn();
       channels = { fetch: vi.fn() };
     },
     GatewayIntentBits: {
@@ -59,6 +63,9 @@ vi.mock('discord.js', () => {
 vi.mock('serchat.ts', () => {
   return {
     Client: class {
+      constructor(options?: unknown) {
+        mockSerchatClientConstructor(options);
+      }
       login = vi.fn();
       on = vi.fn();
       getServer = vi.fn().mockResolvedValue({ _id: 'SERVER', ownerId: 'not-the-user' });
@@ -146,6 +153,7 @@ import {
   db,
 } from './bridge';
 import { knownDiscordWebhooks, cleanupExpiredRequests, purgeMessageMap, EXPIRY_MS } from './db';
+import { reconcileDiscordDeletedMessages } from './discord-handlers';
 import { CappedMap } from './serchat-handlers';
 
 const discordEvents: Record<string, (...args: unknown[]) => unknown> = {};
@@ -194,6 +202,20 @@ describe('Bridge Bot Utility Tests', () => {
       ['D2', 's2', 'discord'],
     );
     expect(await hasMutualAllowlist('D2', 'S2')).toBe(false);
+  });
+
+  it('should configure the Serchat client from SERCHAT_API_BASE_URL when provided', async () => {
+    vi.resetModules();
+    process.env.SERCHAT_API_BASE_URL = 'https://rolling.catfla.re/api/v1';
+
+    await import('./bridge.js');
+
+    expect(mockSerchatClientConstructor).toHaveBeenCalledWith({
+      apiBaseUrl: 'https://rolling.catfla.re/api/v1',
+      logLevel: 'info',
+    });
+
+    delete process.env.SERCHAT_API_BASE_URL;
   });
 
   it('refreshWebhookCache should populate knownSerchatWebhooks from DB', async () => {
@@ -785,6 +807,36 @@ describe('Bridge Bot Utility Tests', () => {
       'SELECT * FROM message_map WHERE source_message_id IN ("discord-bulk-1", "discord-bulk-2")',
     );
     expect(remaining).toHaveLength(0);
+  });
+
+  it('should reconcile missed Discord deletions by checking mapped source messages', async () => {
+    await db.run(
+      'INSERT INTO bridges (discord_channel_id, discord_server_id, serchat_channel_id, serchat_server_id, discord_webhook_id, discord_webhook_token, serchat_webhook_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ['DC_FORWARD', 'DS1', 'SC_FORWARD', 'SS1', 'dw1', 'dt1', 'sw1'],
+    );
+    await db.run(
+      'INSERT INTO message_map (source_platform, source_message_id, target_platform, target_channel_id, target_webhook_message_id) VALUES (?, ?, ?, ?, ?)',
+      ['discord', 'discord-missed-delete-1', 'serchat', 'SC_FORWARD', 'serchat-webhook-message-1'],
+    );
+
+    discord.channels.fetch = vi.fn().mockResolvedValue({
+      messages: {
+        fetch: vi.fn().mockRejectedValue({ code: 10008, status: 404 }),
+      },
+    });
+    serchat.webhooks.deleteWebhookMessage = vi.fn().mockResolvedValue({});
+
+    await reconcileDiscordDeletedMessages(discord, serchat);
+
+    expect(discord.channels.fetch).toHaveBeenCalledWith('DC_FORWARD');
+    expect(serchat.webhooks.deleteWebhookMessage).toHaveBeenCalledWith(
+      'sw1',
+      'serchat-webhook-message-1',
+    );
+    const mapped = await db.get(
+      'SELECT * FROM message_map WHERE source_message_id = "discord-missed-delete-1"',
+    );
+    expect(mapped).toBeUndefined();
   });
 
   it('should delete the Discord webhook message when a bridged Serchat message is deleted', async () => {

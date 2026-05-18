@@ -16,10 +16,20 @@ import {
 
 const MAX_NO_EMBEDS_URLS = 25;
 const DISCORD_FORWARD_REFERENCE_TYPE = 1;
+const DISCORD_UNKNOWN_MESSAGE = 10008;
+const DISCORD_DELETE_RECONCILE_INTERVAL_MS = 30_000;
+const DISCORD_DELETE_RECONCILE_BATCH_SIZE = 100;
 const URL_PATTERN = /https?:\/\/[^\s<>()]+/gi;
 
 type DiscordBridgeMessage = Message | PartialMessage;
 type DiscordReadableMessage = Pick<DiscordBridgeMessage, 'content' | 'attachments' | 'mentions'>;
+type DiscordToSerchatMessageMap = {
+  source_message_id: string;
+  target_channel_id: string;
+  target_webhook_message_id: string;
+  discord_channel_id?: string;
+  serchat_webhook_id?: string;
+};
 
 export function extractUrls(text: string): string[] {
   const urls: string[] = [];
@@ -87,6 +97,55 @@ async function fetchDiscordMessageIfPartial(
   }
   return msg;
 }
+
+function getErrorStatus(error: unknown): number | undefined {
+  return typeof error === 'object' && error !== null && 'status' in error
+    ? Number((error as { status?: unknown }).status)
+    : undefined;
+}
+
+function getErrorCode(error: unknown): number | string | undefined {
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? (error as { code?: number | string }).code
+    : undefined;
+}
+
+function isDiscordUnknownMessageError(error: unknown): boolean {
+  return getErrorCode(error) === DISCORD_UNKNOWN_MESSAGE || getErrorStatus(error) === 404;
+}
+
+async function deleteSerchatMessageForDiscordMap(
+  serchat: SerchatClient,
+  map: DiscordToSerchatMessageMap,
+): Promise<void> {
+  const webhookId =
+    map.serchat_webhook_id ??
+    (
+      await db.get('SELECT serchat_webhook_id FROM bridges WHERE serchat_channel_id = ?', [
+        map.target_channel_id,
+      ])
+    )?.serchat_webhook_id;
+
+  if (!webhookId) return;
+
+  try {
+    await serchat.webhooks.deleteWebhookMessage(
+      String(webhookId),
+      String(map.target_webhook_message_id),
+    );
+  } catch (error: unknown) {
+    if (getErrorStatus(error) !== 404) {
+      throw error;
+    }
+  }
+
+  await db.run(
+    'DELETE FROM message_map WHERE source_platform = "discord" AND source_message_id = ? AND target_channel_id = ?',
+    [map.source_message_id, map.target_channel_id],
+  );
+}
+
+
 
 export async function ensureDiscordWebhook(
   discord: DiscordClient,
@@ -361,24 +420,11 @@ export function setupDiscordHandlers(discord: DiscordClient, serchat: SerchatCli
 
     for (const map of mappings) {
       try {
-        const bridge = await db.get(
-          'SELECT serchat_webhook_id FROM bridges WHERE serchat_channel_id = ?',
-          [map.target_channel_id],
-        );
-        if (bridge) {
-          await serchat.webhooks.deleteWebhookMessage(
-            String(bridge.serchat_webhook_id),
-            String(map.target_webhook_message_id),
-          );
-        }
+        await deleteSerchatMessageForDiscordMap(serchat, map as DiscordToSerchatMessageMap);
       } catch (e: unknown) {
         console.error('[Discord->Serchat] Failed to delete message:', e);
       }
     }
-
-    await db.run('DELETE FROM message_map WHERE source_platform = "discord" AND source_message_id = ?', [
-      msg.id,
-    ]);
   });
 
   discord.on('messageDeleteBulk', async (messages) => {
@@ -391,25 +437,11 @@ export function setupDiscordHandlers(discord: DiscordClient, serchat: SerchatCli
 
       for (const map of mappings) {
         try {
-          const bridge = await db.get(
-            'SELECT serchat_webhook_id FROM bridges WHERE serchat_channel_id = ?',
-            [map.target_channel_id],
-          );
-          if (bridge) {
-            await serchat.webhooks.deleteWebhookMessage(
-              String(bridge.serchat_webhook_id),
-              String(map.target_webhook_message_id),
-            );
-          }
+          await deleteSerchatMessageForDiscordMap(serchat, map as DiscordToSerchatMessageMap);
         } catch (e: unknown) {
           console.error('[Discord->Serchat] Failed to bulk-delete message:', e);
         }
       }
-
-      await db.run(
-        'DELETE FROM message_map WHERE source_platform = "discord" AND source_message_id = ?',
-        [msg.id],
-      );
     }
   });
 }

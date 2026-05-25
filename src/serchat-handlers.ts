@@ -1,4 +1,4 @@
-import { Client as DiscordClient, WebhookClient } from 'discord.js';
+import { AttachmentBuilder, Client as DiscordClient, WebhookClient } from 'discord.js';
 import {
   Client as SerchatClient,
   BotCommand,
@@ -466,6 +466,20 @@ class AcceptBridgeCommand extends BotCommand {
   }
 }
 
+function wrapLinks(content: string): string {
+  content = content.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+    '[$1](<$2>)'
+  );
+
+  content = content.replace(
+    /(?<!<)(https?:\/\/[^\s>]+)(?!>)/g,
+    '<$1>'
+  );
+
+  return content;
+}
+
 export function setupSerchatHandlers(discord: DiscordClient, serchat: SerchatClient) {
   discordClientGlobal = discord;
   serchatClientGlobal = serchat;
@@ -651,14 +665,15 @@ export function setupSerchatHandlers(discord: DiscordClient, serchat: SerchatCli
       }
       let repliedContent = await resolveSerchatMentions(serchat, repliedTo.text || '');
       repliedContent = await resolveSerchatEmojis(serchat, repliedContent);
+      repliedContent = wrapLinks(repliedContent);
       finalContent = `> **${repliedTo.senderUsername}**: ${repliedContent.replace(/\n/g, '\n> ')}\n${finalContent}`;
     }
-
+    
+    let attachment_urls: string[] = [];
     if (msg.hasAttachments()) {
-      const urls = msg.attachments!
+      attachment_urls = msg.attachments!
         .map((a) => msg.getAttachmentUrl(a))
         .join('\n');
-      finalContent += `\n${urls}`;
     }
 
     if (finalContent.length > 1990) {
@@ -676,6 +691,7 @@ export function setupSerchatHandlers(discord: DiscordClient, serchat: SerchatCli
           username,
           avatarURL: avatarUrl,
           allowedMentions: { parse: [] },
+          files: attachment_urls.map((a) => new AttachmentBuilder(a))
         });
 
         await db.run(

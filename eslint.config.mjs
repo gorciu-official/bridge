@@ -9,6 +9,13 @@ export default tseslint.config(
     ignores: ['dist/**'],
   },
   {
+    languageOptions: {
+      parserOptions: {
+        projectService: {
+          allowDefaultProject: ['eslint.config.mjs', 'vitest.config.ts'],
+        },
+      },
+    },
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/no-unused-vars': [
@@ -16,6 +23,20 @@ export default tseslint.config(
         {
           argsIgnorePattern: '^_',
           caughtErrorsIgnorePattern: '^_?',
+        },
+      ],
+      '@typescript-eslint/no-unnecessary-condition': [
+        'error',
+        {
+          allowConstantLoopConditions: true,
+        },
+      ],
+      '@typescript-eslint/prefer-nullish-coalescing': [
+        'error',
+        {
+          ignorePrimitives: { string: true },
+          ignoreTernaryTests: true,
+          ignoreMixedLogicalExpressions: false,
         },
       ],
     },

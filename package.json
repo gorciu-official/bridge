@@ -4,6 +4,7 @@
   "description": "",
   "main": "src/bridge.ts",
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "start": "tsx src/bridge.ts",
     "lint": "eslint .",
     "format": "prettier --write .",

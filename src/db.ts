@@ -1,7 +1,7 @@
 import sqlite3 from 'sqlite3';
 import { open, Database } from 'sqlite';
 
-export let db: Database<sqlite3.Database, sqlite3.Statement>;
+export let db: Database<sqlite3.Database, sqlite3.Statement> | undefined;
 export const knownSerchatWebhooks = new Set<string>();
 export const knownDiscordWebhooks = new Set<string>();
 
@@ -10,7 +10,7 @@ export const EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 const rateLimits = new Map<string, number[]>();
 export function isRateLimited(channelId: string): boolean {
   const now = Date.now();
-  let timestamps = rateLimits.get(channelId) || [];
+  let timestamps = rateLimits.get(channelId) ?? [];
   timestamps = timestamps.filter(t => now - t < 1000);
   if (timestamps.length >= 5) {
     return true;
@@ -125,12 +125,12 @@ export async function hasMutualAllowlist(
   const normalizedDiscordServerId = discordServerId.trim();
   const normalizedSerchatServerId = serchatServerId.trim().toLowerCase();
 
-  const discordRow = await db.get(
+  const discordRow = await db!.get(
     'SELECT id FROM servers_allowlist WHERE added_by = "discord" AND discord_server_id = ? AND serchat_server_id = ?',
     [normalizedDiscordServerId, normalizedSerchatServerId],
   );
 
-  const serchatRow = await db.get(
+  const serchatRow = await db!.get(
     'SELECT id FROM servers_allowlist WHERE added_by = "serchat" AND serchat_server_id = ? AND discord_server_id = ?',
     [normalizedSerchatServerId, normalizedDiscordServerId],
   );
